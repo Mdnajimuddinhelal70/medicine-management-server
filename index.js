@@ -41,7 +41,13 @@ async function run() {
     const result = await cartsCollection.find().toArray();
     res.send(result)
    });
-   
+   app.delete('/carts/:id', async(req, res) => {
+    const id = req.params.id;
+    const query = {_id: new ObjectId(id)};
+    const result = await cartsCollection.deleteOne(query);
+    res.send(result) 
+   });
+     
   app.get('/medicines/category/:categoryId', async (req, res) => {
     const categoryId = req.params.categoryId;
   
