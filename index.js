@@ -31,12 +31,16 @@ async function run() {
     res.send(result)
    });
 
-  
+  // carts related apis
    app.post('/carts', async(req, res) => {
     const cartItem = req.body;
     const result = await cartsCollection.insertOne(cartItem)
     res.send(result);
-   })
+   });
+   app.get('/carts', async(req, res) => {
+    const result = await cartsCollection.find().toArray();
+    res.send(result)
+   });
    
   app.get('/medicines/category/:categoryId', async (req, res) => {
     const categoryId = req.params.categoryId;
