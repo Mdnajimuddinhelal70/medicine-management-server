@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 require("dotenv").config();
 const cors = require("cors");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 8000;
 
 //middlewares
@@ -21,7 +22,9 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    const medicineCollection = client.db("medicinesDb").collection("myMedicine");
+    const medicineCollection = client
+      .db("medicinesDb")
+      .collection("myMedicine");
     const cartsCollection = client.db("medicinesDb").collection("carts");
 
     app.get("/myMedicine", async (req, res) => {
@@ -45,7 +48,7 @@ async function run() {
       const result = await cartsCollection.deleteOne(query);
       res.send(result);
     });
-   
+
     //Upaadte quantity
     app.patch("/carts/:id", async (req, res) => {
       const id = req.params.id;
@@ -57,8 +60,32 @@ async function run() {
       const result = await cartsCollection.updateOne(query, updateDoc);
       res.send(result);
     });
+    // payment related api
+   
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+     
+      if (typeof price !== 'number' || price <= 0) {
+        console.log(price);
+        return res.status(400).send({ error: "Invalid price value" });
+      }  
+      const amount = Math.round(price * 100); 
+      try {  
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });    
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        console.error("Payment Intent Error:", error);
+        res.status(500).send({ error: "Payment processing failed" });
+      }
+    });
     
-
+    
 
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
