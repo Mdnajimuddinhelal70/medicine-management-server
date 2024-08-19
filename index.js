@@ -95,7 +95,11 @@ async function run() {
       const deleteResult = await cartsCollection.deleteMany(query)
       res.send({paymentResult, deleteResult})
     });
-    
+
+     app.get('/payments', async(req, res) => {
+      const result = await paymentCollection.find().toArray();
+      res.send(result)
+     })
 
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
