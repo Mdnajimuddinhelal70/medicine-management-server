@@ -22,10 +22,9 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    const medicineCollection = client
-      .db("medicinesDb")
-      .collection("myMedicine");
+    const medicineCollection = client.db("medicinesDb").collection("myMedicine");
     const cartsCollection = client.db("medicinesDb").collection("carts");
+    const paymentCollection = client.db("medicinesDb").collection("payments");
 
     app.get("/myMedicine", async (req, res) => {
       const result = await medicineCollection.find().toArray();
@@ -85,6 +84,17 @@ async function run() {
       }
     });
     
+
+
+    app.post('/payments', async(req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+      const query = {_id: {
+        $in: payment.cartIds.map(id => new ObjectId(id))
+      }};
+      const deleteResult = await cartsCollection.deleteMany(query)
+      res.send({paymentResult, deleteResult})
+    });
     
 
     console.log(
