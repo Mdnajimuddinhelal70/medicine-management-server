@@ -23,9 +23,23 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const medicineCollection = client.db("medicinesDb").collection("myMedicine");
+    const usersCollection = client.db("medicinesDb").collection("users");
     const cartsCollection = client.db("medicinesDb").collection("carts");
     const paymentCollection = client.db("medicinesDb").collection("payments");
 
+
+    //users related api
+    app.post('/users', async(req, res) => {
+      const user = req.body;
+      const query = {email: user.email}
+      const existingUser = await usersCollection.findOne(query)
+      if(existingUser){
+        return res.send({message: 'user already exists', insertedId: null})
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result)
+    });
+    
     app.get("/myMedicine", async (req, res) => {
       const result = await medicineCollection.find().toArray();
       res.send(result);
@@ -96,8 +110,9 @@ async function run() {
       res.send({paymentResult, deleteResult})
     });
 
-     app.get('/payments', async(req, res) => {
-      const result = await paymentCollection.find().toArray();
+     app.get('/payments/:email', async(req, res) => {
+      const query = {email: req.params.email}
+      const result = await paymentCollection.find(query).toArray();
       res.send(result)
      })
 
