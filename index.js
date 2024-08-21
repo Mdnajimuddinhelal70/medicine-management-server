@@ -53,35 +53,8 @@ async function run() {
     }
 
     //users related api
-    app.get('/users', verifyToken, async(req, res) => {  
-      const result = await usersCollection.find().toArray()
-      res.send(result)
-    });
 
-    //api for making admin
-    app.patch('/users/admin/:id', verifyToken, async(req, res) => {
-      const id = req.params.id;
-      const filter = {_id: new ObjectId(id)};
-      const updatedDoc = {
-        $set:{
-          role: 'admin'
-        }
-      }
-      const result = await usersCollection.updateOne(filter, updatedDoc)
-      res.send(result)
-    });
-
-    app.post('/users', async(req, res) => {
-      const user = req.body;
-      const query = {email: user.email}
-      const existingUser = await usersCollection.findOne(query)
-      if(existingUser){
-        return res.send({message: 'user already exists', insertedId: null})
-      }
-      const result = await usersCollection.insertOne(user);
-      res.send(result)
-    });
-
+    //verify token
     app.get('/users/admin/:email', verifyToken, async(req, res) => {
       const email = req.params.email;
       if(email !== req.decoded.email) {
@@ -94,7 +67,49 @@ async function run() {
         admin = user?.role === 'admin';
       }
       res.send({admin})
-    })
+    });
+
+     //api for verify admin
+     const verifyAdmin = async(req, res, next) => {
+      const email = req.decoded.email;
+      const query = {email: email}
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === 'admin';
+      if(!isAdmin){
+        return res.status(403).send({message: 'forbidden access'})
+      }
+      next();
+    }
+     // for getting users
+    app.get('/users', verifyToken, verifyAdmin, async(req, res) => {  
+      const result = await usersCollection.find().toArray()
+      res.send(result)
+    });
+
+    //api for making admin role
+    app.patch('/users/admin/:id', verifyToken, async(req, res) => {
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)};
+      const updatedDoc = {
+        $set:{
+          role: 'admin'
+        }
+      }
+      const result = await usersCollection.updateOne(filter, updatedDoc)
+      res.send(result)
+    });
+
+    // for existing email
+    app.post('/users', async(req, res) => {
+      const user = req.body;
+      const query = {email: user.email}
+      const existingUser = await usersCollection.findOne(query)
+      if(existingUser){
+        return res.send({message: 'user already exists', insertedId: null})
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result)
+    });
     
     app.get("/myMedicine", async (req, res) => {
       const result = await medicineCollection.find().toArray();
