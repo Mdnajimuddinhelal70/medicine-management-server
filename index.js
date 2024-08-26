@@ -29,6 +29,12 @@ async function run() {
     const usersCollection = client.db("medicinesDb").collection("users");
     const cartsCollection = client.db("medicinesDb").collection("carts");
     const paymentCollection = client.db("medicinesDb").collection("payments");
+    const advertisementCollection = client
+      .db("medicinesDb")
+      .collection("advertisements");
+    const advertiseCollection = client
+      .db("medicinesDb")
+      .collection("advertises");
 
     // JWT Token Generation
     app.post("/jwt", (req, res) => {
@@ -67,66 +73,39 @@ async function run() {
     };
 
     // Users Related APIs
-    app.get("/users/admin/:email", verifyToken, async (req, res) => {
-      const email = req.params.email;
-      if (email !== req.decoded.email) {
-        return res.status(403).send({ message: "Unauthorized access" });
-      }
-      const query = { email: email };
-      const user = await usersCollection.findOne(query);
-      const isAdmin = user?.role === "admin";
-      res.send({ admin: isAdmin });
-    });
-
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const users = await usersCollection.find().toArray();
       res.send(users);
     });
 
-    app.patch("/users/admin/:id", verifyToken, async (req, res) => {
+
+    // API to check if a user is an admin
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "Unauthorized access" });
+      }
+      const user = await usersCollection.findOne({ email });
+      const isAdmin = user?.role === "admin";
+      res.send({ admin: isAdmin });
+    });
+
+    // Generic API to update user role
+    app.patch("/users/role/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
+      const { role } = req.body; // Expect role to be passed in request body
+      const validRoles = ["admin", "seller", "user"];
+
+      // Validate the role
+      if (!validRoles.includes(role)) {
+        return res.status(400).send({ message: "Invalid role" });
+      }
+
       const filter = { _id: new ObjectId(id) };
-      const updateDoc = { $set: { role: "admin" } };
+      const updateDoc = { $set: { role } };
       const result = await usersCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
-
-    // Make Seller API
-    app.patch(
-      "/users/seller/:id",
-      verifyToken,
-      verifyAdmin,
-      async (req, res) => {
-        const id = req.params.id;
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = { $set: { role: "seller" } };
-        const result = await usersCollection.updateOne(filter, updateDoc);
-        res.send(result);
-      }
-    );
-    app.patch(
-      "/users/user/:id",
-      verifyToken,
-      verifyAdmin,
-      async (req, res) => {
-        const id = req.params.id;
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = { $set: { role: "user" } };
-        const result = await usersCollection.updateOne(filter, updateDoc);
-        res.send(result);
-      }
-    );
-
-    app.get("/payment-history", verifyToken, async (req, res) => {
-      try {
-        const { email } = req.query;
-        const payments = await paymentCollection.find({ email }).toArray();
-        res.send(payments);
-      } catch (error) {
-        res.status(500).send({ message: "Error fetching payment history." });
-      }
-    });
-    
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -139,7 +118,6 @@ async function run() {
       res.send(result);
     });
 
-    //TODO:
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const result = await usersCollection.findOne({ email });
@@ -152,52 +130,13 @@ async function run() {
       res.send(medicines);
     });
 
-    app.get("/myMedicine", async (req, res) => {
-      const sellerEmail = req.user.email;
-      const medicines = await medicineCollection
-        .find({ sellerEmail })
-        .toArray();
-      res.send(medicines);
-    });
-
-    app.post("/myMedicine", verifyToken, async (req, res) => {
-      try {
-        const {
-          name,
-          image,
-          category,
-          price,
-          description,
-          type,
-          dosage,
-          noOfMedicines,
-          company,
-          quantity,
-          email,
-        } = req.body;
-       
-
-        const newMedicine = {
-          name,
-          image,
-          category,
-          price,
-          description,
-          type,
-          dosage,
-          noOfMedicines,
-          company,
-          quantity,
-          email,
-        };
-
-        // Insert new medicine into the database
-        await medicineCollection.insertOne(newMedicine);
-        res.status(201).send("Medicine added successfully");
-      } catch (error) {
-        console.error("Error adding medicine:", error);
-        res.status(500).send("Error adding medicine");
-      }
+    //post data to the serer
+    app.post("/myMedicine", async (req, res) => {
+      const medicineData = req.body;
+      console.log("Received data:", medicineData);
+      const result = await medicineCollection.insertOne(medicineData);
+      console.log(result);
+      res.status(200).json({ message: "Medicine added successfully!" });
     });
 
     // Carts Related APIs
@@ -266,7 +205,13 @@ async function run() {
     });
 
     // Get all payments (admin route)
-    app.get("/payments", verifyToken, verifyAdmin, async (req, res) => {
+    app.get("/payments", async (req, res) => {
+      const result = await paymentCollection.find().toArray();
+      res.send(result);
+    });
+
+    // show data to the manage history for seller
+    app.get("/payments", async (req, res) => {
       const result = await paymentCollection.find().toArray();
       res.send(result);
     });
@@ -278,6 +223,21 @@ async function run() {
       const filter = { _id: new ObjectId(id) };
       const result = await paymentCollection.updateOne(filter, updateDoc);
       res.send(result);
+    });
+    // api for payment history in dashboard
+    app.get("/seller-payment-history", async (req, res) => {
+      const { email } = req.query;
+      const paymentHistory = await paymentCollection
+        .find({ sellerEmail: email })
+        .toArray();
+      res.send(paymentHistory);
+    });
+
+    // api for user dashboard
+    app.get("/payment-history", async (req, res) => {
+      const email = req.query.email;
+      const payments = await paymentCollection.find({ email }).toArray();
+      res.send(payments);
     });
 
     // Add a new category
@@ -305,7 +265,55 @@ async function run() {
       res.send(result);
     });
 
-    //Stats
+    //api for advertisment for seller
+    app.post("/advertisements", async (req, res) => {
+      const { sellerEmail, medicineImage, description, status } = req.body;
+      const advertisementData = {
+        sellerEmail,
+        medicineImage,
+        description,
+        status: status || "Not In Use",
+      };
+      const result = await advertisementCollection.insertOne(advertisementData);
+      res.send(result);
+    });
+
+    app.get("/advertisements", async (req, res) => {
+      const sellerEmail = req.query.sellerEmail;
+      const advertisements = await advertisementCollection
+        .find({ sellerEmail })
+        .toArray();
+      res.send(advertisements);
+    });
+
+    //<<============================= apis for admin banner ===================================>>
+
+    // GET all advertisements
+    app.get("/advertise", async (req, res) => {
+      const result = await advertisementCollection.find().toArray();
+      res.send(result);
+    });
+
+    // POST new advertisement
+    app.post("/advertise", async (req, res) => {
+      const advertise = req.body;
+      advertise.addedToSlider = false; // Default set as false
+      const result = await advertisementCollection.insertOne(advertise);
+      res.send(result);
+    });
+
+    // PATCH to toggle add/remove from slider
+    app.patch("/advertise/:id", async (req, res) => {
+      const id = req.params.id;
+      const { addedToSlider } = req.body;
+      const result = await advertisementCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { addedToSlider } }
+      );
+      res.send(result);
+    });
+
+    //Stats for admin dashboard
     app.get("/admin-stats", async (req, res) => {
       try {
         const users = await usersCollection.estimatedDocumentCount();
@@ -316,12 +324,14 @@ async function run() {
         const revenueResult = await paymentCollection
           .aggregate([
             {
-              $match: { status: "paid" }, // Match only paid orders
+              $match: { status: "paid" },
             },
             {
               $group: {
                 _id: null,
-                totalRevenue: { $sum: { $toDouble: "$price" } }, // Ensure price is converted to number
+                totalRevenue: {
+                  $sum: { $toDouble: { $ifNull: ["$price", "0"] } },
+                },
               },
             },
           ])
@@ -330,6 +340,82 @@ async function run() {
           revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
 
         // Calculate total paid
+        const paidTotalResult = await paymentCollection
+          .aggregate([
+            {
+              $match: { status: "paid" },
+            },
+            {
+              $group: {
+                _id: null,
+                totalPaid: {
+                  $sum: { $toDouble: { $ifNull: ["$price", "0"] } },
+                },
+              },
+            },
+          ])
+          .toArray();
+        const totalPaid =
+          paidTotalResult.length > 0 ? paidTotalResult[0].totalPaid : 0;
+
+        // Calculate total pending
+        const pendingTotalResult = await paymentCollection
+          .aggregate([
+            {
+              $match: { status: "pending" },
+            },
+            {
+              $group: {
+                _id: null,
+                totalPending: {
+                  $sum: { $toDouble: { $ifNull: ["$price", "0"] } },
+                },
+              },
+            },
+          ])
+          .toArray();
+        const totalPending =
+          pendingTotalResult.length > 0
+            ? pendingTotalResult[0].totalPending
+            : 0;
+
+        res.send({
+          users,
+          medicineItems,
+          orders,
+          revenue,
+          totalPaid,
+          totalPending,
+        });
+      } catch (error) {
+        console.error("Error fetching admin stats:", error);
+        res.status(500).send({ error: "Failed to fetch admin stats" });
+      }
+    });
+
+    //<<============================= apis for seller ===================================>>
+    app.get("/seller-stats", async (req, res) => {
+      try {
+        const users = await usersCollection.estimatedDocumentCount();
+        const medicineItems = await medicineCollection.estimatedDocumentCount();
+        const orders = await paymentCollection.estimatedDocumentCount();
+
+        // Calculate total revenue from paid orders
+        const revenueResult = await paymentCollection
+          .aggregate([
+            {
+              $match: { status: "paid" },
+            },
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: { $toDouble: "$price" } },
+              },
+            },
+          ])
+          .toArray();
+        const revenue =
+          revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
         const paidTotalResult = await paymentCollection
           .aggregate([
             {
@@ -372,48 +458,6 @@ async function run() {
           revenue,
           totalPaid,
           totalPending,
-        });
-
-        //<============================= //apis for seller ===================================>
-        app.get("/seller-stats", async (req, res) => {
-          const sellerEmail = req.query.email; // Email sent from the frontend as a query parameter
-
-          const paidResult = await paymentCollection
-            .aggregate([
-              {
-                $match: { sellerEmail, status: "paid" },
-              },
-              {
-                $group: {
-                  _id: null,
-                  totalPaidRevenue: { $sum: "$price" },
-                },
-              },
-            ])
-            .toArray();
-          const totalPaidRevenue =
-            paidResult.length > 0 ? paidResult[0].totalPaidRevenue : 0;
-
-          const pendingResult = await paymentCollection
-            .aggregate([
-              {
-                $match: { sellerEmail, status: "pending" },
-              },
-              {
-                $group: {
-                  _id: null,
-                  totalPendingRevenue: { $sum: "$price" },
-                },
-              },
-            ])
-            .toArray();
-          const totalPendingRevenue =
-            pendingResult.length > 0 ? pendingResult[0].totalPendingRevenue : 0;
-
-          res.send({
-            totalPaidRevenue,
-            totalPendingRevenue,
-          });
         });
       } catch (err) {
         console.error(err);
