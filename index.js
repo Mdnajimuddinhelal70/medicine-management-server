@@ -78,7 +78,6 @@ async function run() {
       res.send(users);
     });
 
-
     // API to check if a user is an admin
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
@@ -93,7 +92,7 @@ async function run() {
     // Generic API to update user role
     app.patch("/users/role/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const { role } = req.body; // Expect role to be passed in request body
+      const { role } = req.body; 
       const validRoles = ["admin", "seller", "user"];
 
       // Validate the role
@@ -125,10 +124,28 @@ async function run() {
     });
 
     // Medicines Related APIs
-    app.get("/myMedicine", async (req, res) => {
-      const medicines = await medicineCollection.find().toArray();
+    // app.get("/myMedicine", async (req, res) => {
+    //   const medicines = await medicineCollection.find().toArray();
+    //   res.send(medicines);
+    // });
+
+
+    app.get('/myMedicine', async (req, res) => {
+      const { search = "", sort = "" } = req.query;
+      const query = { name: { $regex: search, $options: "i" } }; 
+      
+      let sortOption = {};
+      if (sort === "price") {
+        sortOption = { price: 1 }; 
+      } else if (sort === "name") {
+        sortOption = { name: 1 }; 
+      } 
+      const medicines = await medicineCollection.find(query).sort(sortOption).toArray();
       res.send(medicines);
     });
+    
+
+
 
     //post data to the serer
     app.post("/myMedicine", async (req, res) => {
@@ -233,11 +250,39 @@ async function run() {
       res.send(paymentHistory);
     });
 
-    // api for user dashboard
+   
+    app.get("/inv-payments/:email", async (req, res) => {
+      const email = req.params.email;
+      const payments = await paymentCollection
+        .find({ buyerEmail: email })
+        .toArray();
+      res.send(payments);
+    });
+
     app.get("/payment-history", async (req, res) => {
       const email = req.query.email;
-      const payments = await paymentCollection.find({ email }).toArray();
-      res.send(payments);
+      const payments = await paymentCollection
+        .find({ buyerEmail: email })
+        .toArray();
+      const paidTotal = payments
+        .filter((payment) => payment.status === "paid")
+        .reduce((sum, payment) => sum + payment.price, 0);
+      const pendingTotal = payments
+        .filter((payment) => payment.status === "pending")
+        .reduce((sum, payment) => sum + payment.price, 0);
+      res.send({
+        paymentHistory: payments,
+        paidTotal,
+        pendingTotal,
+      });
+    });
+
+    //for delete payment
+    app.delete("/payments/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await paymentCollection.deleteOne(query);
+      res.send(result);
     });
 
     // Add a new category
