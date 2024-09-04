@@ -4,10 +4,19 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const port = process.env.PORT || 8000;
+const port = process.env.PORT || 8001;
 
 //middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://b9-a12-project.web.app",
+      "https://b9-a12-project.firebaseapp.com",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -32,9 +41,6 @@ async function run() {
     const advertisementCollection = client
       .db("medicinesDb")
       .collection("advertisements");
-    const advertiseCollection = client
-      .db("medicinesDb")
-      .collection("advertises");
 
     // JWT Token Generation
     app.post("/jwt", (req, res) => {
@@ -92,14 +98,11 @@ async function run() {
     // Generic API to update user role
     app.patch("/users/role/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const { role } = req.body; 
+      const { role } = req.body;
       const validRoles = ["admin", "seller", "user"];
-
-      // Validate the role
       if (!validRoles.includes(role)) {
         return res.status(400).send({ message: "Invalid role" });
       }
-
       const filter = { _id: new ObjectId(id) };
       const updateDoc = { $set: { role } };
       const result = await usersCollection.updateOne(filter, updateDoc);
@@ -124,28 +127,27 @@ async function run() {
     });
 
     // Medicines Related APIs
-    // app.get("/myMedicine", async (req, res) => {
-    //   const medicines = await medicineCollection.find().toArray();
-    //   res.send(medicines);
-    // });
-
-
-    app.get('/myMedicine', async (req, res) => {
-      const { search = "", sort = "" } = req.query;
-      const query = { name: { $regex: search, $options: "i" } }; 
-      
-      let sortOption = {};
-      if (sort === "price") {
-        sortOption = { price: 1 }; 
-      } else if (sort === "name") {
-        sortOption = { name: 1 }; 
-      } 
-      const medicines = await medicineCollection.find(query).sort(sortOption).toArray();
+    app.get("/myMedicine", async (req, res) => {
+      const medicines = await medicineCollection.find().toArray();
       res.send(medicines);
     });
-    
 
+    app.get("/myMedicineUp", async (req, res) => {
+      const { search = "", sort = "" } = req.query;
+      const query = { name: { $regex: search, $options: "i" } };
 
+      let sortOption = {};
+      if (sort === "price") {
+        sortOption = { price: 1 };
+      } else if (sort === "name") {
+        sortOption = { name: 1 };
+      }
+      const medicines = await medicineCollection
+        .find(query)
+        .sort(sortOption)
+        .toArray();
+      res.send(medicines);
+    });
 
     //post data to the serer
     app.post("/myMedicine", async (req, res) => {
@@ -250,7 +252,6 @@ async function run() {
       res.send(paymentHistory);
     });
 
-   
     app.get("/inv-payments/:email", async (req, res) => {
       const email = req.params.email;
       const payments = await paymentCollection
@@ -331,8 +332,6 @@ async function run() {
       res.send(advertisements);
     });
 
-    //<<============================= apis for admin banner ===================================>>
-
     // GET all advertisements
     app.get("/advertise", async (req, res) => {
       const result = await advertisementCollection.find().toArray();
@@ -342,7 +341,7 @@ async function run() {
     // POST new advertisement
     app.post("/advertise", async (req, res) => {
       const advertise = req.body;
-      advertise.addedToSlider = false; // Default set as false
+      advertise.addedToSlider = false;
       const result = await advertisementCollection.insertOne(advertise);
       res.send(result);
     });
@@ -384,7 +383,6 @@ async function run() {
         const revenue =
           revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
 
-        // Calculate total paid
         const paidTotalResult = await paymentCollection
           .aggregate([
             {
@@ -403,7 +401,6 @@ async function run() {
         const totalPaid =
           paidTotalResult.length > 0 ? paidTotalResult[0].totalPaid : 0;
 
-        // Calculate total pending
         const pendingTotalResult = await paymentCollection
           .aggregate([
             {
@@ -438,14 +435,12 @@ async function run() {
       }
     });
 
-    //<<============================= apis for seller ===================================>>
     app.get("/seller-stats", async (req, res) => {
       try {
         const users = await usersCollection.estimatedDocumentCount();
         const medicineItems = await medicineCollection.estimatedDocumentCount();
         const orders = await paymentCollection.estimatedDocumentCount();
 
-        // Calculate total revenue from paid orders
         const revenueResult = await paymentCollection
           .aggregate([
             {
@@ -476,8 +471,6 @@ async function run() {
           .toArray();
         const totalPaid =
           paidTotalResult.length > 0 ? paidTotalResult[0].totalPaid : 0;
-
-        // Calculate total pending
         const pendingTotalResult = await paymentCollection
           .aggregate([
             {
@@ -516,12 +509,10 @@ async function run() {
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
   } finally {
-    // Optional: Clean up resources if needed
   }
 }
 run().catch(console.dir);
 
-// Root Route and Server Listener
 app.get("/", (req, res) => {
   res.send("Medicines project is running");
 });
